@@ -8,7 +8,7 @@ def get_db_url() -> str:
         getenv('POSTGRES_PASSWORD', 'password'),
         getenv('POSTGRES_HOST', 'localhost'),
         getenv('PGPORT', '5432'),
-        getenv('PGDATABASE', 'foods'),
+        getenv('PGDATABASE', 'food'),
     )
 
 
