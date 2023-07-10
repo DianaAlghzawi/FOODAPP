@@ -17,8 +17,8 @@ contents_router = APIRouter(
 )
 
 
-@contents_router.get('/')
-async def get_by_sort_order(calories_order: Optional[SortOrderEnum] = None) -> JSONResponse:
+@contents_router.get('')
+async def get(calories_order: Optional[SortOrderEnum] = None, name: Optional[str] = None) -> JSONResponse:
     query = select(contents_schema)
 
     if calories_order:
@@ -26,13 +26,10 @@ async def get_by_sort_order(calories_order: Optional[SortOrderEnum] = None) -> J
             if calories_order == 'DESCINDING' else contents.add_sort_order_filter(query, contents_schema.c.calories)
 
     with engine.connect() as conn:
+        if name:
+            return JSONResponse(content=jsonable_encoder(contents.get_by_name_or_raise(conn, name)), status_code=status.HTTP_200_OK)
+
         return JSONResponse(content=jsonable_encoder(contents.apply_sort_order_filter(conn, query)), status_code=status.HTTP_200_OK)
-
-
-@contents_router.get('/{name}')
-async def get_by_name(name: str) -> JSONResponse:
-    with engine.connect() as conn:
-        return JSONResponse(content=jsonable_encoder(contents.get_by_name_or_raise(conn, name)), status_code=status.HTTP_200_OK)
 
 
 @contents_router.get('/{id}/')
@@ -41,16 +38,16 @@ async def get_by_id(id: UUID) -> JSONResponse:
         return JSONResponse(content=jsonable_encoder(contents.get_by_id(conn, id)), status_code=status.HTTP_200_OK)
 
 
-@contents_router.post('/')
+@contents_router.post('')
 def insert(content: Content) -> JSONResponse:
     with engine.begin() as conn:
         if content_info := contents.get_by_name(conn, content.name):
             return JSONResponse(content=jsonable_encoder(content_info), status_code=status.HTTP_200_OK)
-        return JSONResponse(content=jsonable_encoder(contents.new(conn, content.name, content.count, content.calories, content.food_id)),
+        return JSONResponse(content=jsonable_encoder(contents.new(conn, content.name, content.count, content.calories)),
                             status_code=status.HTTP_201_CREATED)
 
 
-@contents_router.delete('/')
+@contents_router.delete('')
 def delete(id: UUID) -> Response:
     with engine.begin() as conn:
         contents.delete(conn, id)

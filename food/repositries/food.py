@@ -4,15 +4,16 @@ from datetime import datetime
 from sqlalchemy.engine import Connection
 from food.infra.db.schema import food, contents
 from food.exception import ModelNotFoundException
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import insert, array
 # from food.repositries.contents import get_by_name as get_by_content_name
-from sqlalchemy import select, func
+from sqlalchemy import select, func, String
 from sqlalchemy.sql.expression import UnaryExpression
 from sqlalchemy.sql.selectable import Select
 from typing import List
-from datetime import timedelta
-from sqlalchemy import or_
+from sqlalchemy import or_, any_
 from typing import Optional
+import math
+from food.repositries.contents import Content
 
 
 @dataclass
@@ -23,12 +24,31 @@ class Food:
     type: str
     price: float
     calories: int
-    time_to_be_prepared: int
-    contents: list[str]
+    prepared_time: datetime
+    content: list[UUID]
     category: str
-    food_number: int
     created_at: datetime
     updated_at: datetime
+
+    def __init__(self, id, name, size, type, price, calories, prepared_time, content,
+                 category, created_at, updated_at):
+        self.id = id
+        self.name = name
+        self.size = size
+        self.type = type
+        self.price = price
+        self.calories = calories
+        self.prepared_time = prepared_time
+        self.content = content
+        self.category = category
+        self.created_at = created_at
+        self.updated_at = updated_at
+
+
+@dataclass
+class CombinedResponses:
+    food: Food
+    contents: List[Content]
 
 
 MEAL_ADDIONAL_CALORIES = 300
@@ -41,19 +61,56 @@ def add_sort_order_filter(query: Select, filter: UnaryExpression) -> Select:
     return query.order_by(filter)
 
 
+def add_sort_order_filter_by_calories(filter: UnaryExpression) -> Select:
+    return select([food, contents]).select_from(food.join(contents, any_(food.c.content) == contents.c.id)).order_by(filter)
+
+
+def get_combined_response(conn: Connection, query: Select):
+    food_dict = {}
+
+    for row in conn.execute(query).fetchall():
+        food_data = Food(
+            id=row.id,
+            name=row.name,
+            size=row.size,
+            type=row.type,
+            price=row.price,
+            calories=row.calories,
+            prepared_time=row.prepared_time,
+            content=row.content,
+            category=row.category,
+            created_at=row.created_at,
+            updated_at=row.updated_at
+        )
+        content = Content(id=row.id_1,
+                          name=row.name_1,
+                          calories=row.calories,
+                          count=row.count,
+                          created_at=row.created_at_1,
+                          updated_at=row.updated_at_1)
+
+        food_dict.setdefault(food_data.id, {"food": food_data, "contents": []})["contents"].append(content)
+
+    return [CombinedResponses(food=food_data['food'], contents=food_data['contents']) for _, food_data in food_dict.items()]
+
+
 def apply_sort_order_filter(conn: Connection, query: Select) -> List[Food]:
     """ Apply the sort order filter and return a list of the ordered food base on the calories, price. """
     return [Food(**food_info._asdict()) for food_info in conn.execute(query).fetchall()]
 
 
-def calculate_calories(conn: Connection, food_contents: list[str], size: str, category: str) -> int:
-    """ Calculate calories based on size, content, and meal type, and returns the calories value. Raise if one of the contents not exist. """
-
+def convert_contents_string_list_to_uuid_list(conn: Connection, food_contents: list[str]) -> List[UUID]:
+    """ Convert contents list string to list of uuid """
     if missing_contents := set(food_contents) - set(conn.execute(select(contents.c.name).where(contents.c.name.in_(food_contents))).scalars()):
         raise ModelNotFoundException('Food', 'contents', missing_contents)
 
-    if contents_calories_summation := conn.execute(select(func.sum(contents.c.calories))
-                                                   .where(contents.c.name.in_(food_contents))).scalar():
+    return conn.execute(select(contents.c.id).where(contents.c.name.in_(food_contents))).scalars().fetchall()
+
+
+def calculate_calories(conn: Connection, food_contents_ids: list[UUID], size: str, category: str) -> int:
+    """ Calculate calories based on size, content, and meal type, and returns the calories value. Raise if one of the contents not exist. """
+
+    if contents_calories_summation := conn.execute(select(func.sum(contents.c.calories)).where(contents.c.id.in_(food_contents_ids))).scalar():
         calories = contents_calories_summation * MEDUIM_SIZE if size == 'MEDUIM' else contents_calories_summation * \
             LARGE_SIZE if size == 'LARGE' else contents_calories_summation
         calories = calories + MEAL_ADDIONAL_CALORIES if category == 'MEAL' else calories
@@ -61,8 +118,8 @@ def calculate_calories(conn: Connection, food_contents: list[str], size: str, ca
         return calories
 
 
-def new(conn: Connection, calories: int, category: str, name: str, size: str, type: str, price: float, food_contents: list[str],
-        time_to_be_prepared: int) -> Food:
+def new(conn: Connection, calories: int, category: str, name: str, size: str, type: str, price: float, content: list[UUID],
+        prepared_time: datetime) -> Food:
     """ Insert a new food item into the database and return the inserted food object. """
 
     return Food(**(conn.execute(insert(food).values(
@@ -70,30 +127,31 @@ def new(conn: Connection, calories: int, category: str, name: str, size: str, ty
                 size=size,
                 type=type,
                 price=price,
-                contents=food_contents,
-                time_to_be_prepared=time_to_be_prepared,
+                content=array(content),
+                prepared_time=prepared_time,
                 calories=calories,
                 category=category
                 ).returning(food)).fetchone()._asdict()))
 
 
-def update_time_until_prepared(conn: Connection, name: Optional[str] = None, id: Optional[UUID] = None) -> None:
+def get_time_until_prepared(conn: Connection, name: Optional[str] = None, id: Optional[UUID] = None) -> String:
     """ Update a time_to_be_prepared for food items into the database by name or by id. """
 
-    if food_info := conn.execute(select([food.c.time_to_be_prepared, food.c.created_at]).
-                                 where(or_(food.c.id == id, food.c.name == name))).fetchone():
-        time_until_prepared = \
-            max(food_info.time_to_be_prepared - int((datetime.now() - timedelta(seconds=food_info.created_at.timestamp())).second), 0)
-        conn.execute(food.update().where(or_(food.c.id == id, food.c.name == name)).values(time_to_be_prepared=time_until_prepared))
+    if food_info := conn.execute(select(food.c.prepared_time).where(or_(food.c.id == id, food.c.name == name))).fetchone():
+        return str(max(math.ceil(((food_info.prepared_time - datetime.now()).total_seconds() / 60)), 0)) + ' Minutes'
     else:
-        raise (ModelNotFoundException('Food', 'name', name) if name else ModelNotFoundException('Food', 'id', id))
+        raise ModelNotFoundException('Food', 'name', name) if name else ModelNotFoundException('Food', 'id', id)
 
 
 def get_by_name(conn: Connection, name: str) -> List[Food]:
     """ Get a list of food by the food name, and raise if food name not found"""
 
     if food_info := conn.execute(food.select().where(food.c.name == name)).fetchall():
-        return [Food(**food_info._asdict()) for food_info in food_info]
+        return [
+            Food(**{**food_info_row._asdict(), 'prepared_time': get_time_until_prepared(conn, id=food_info_row.id)})
+            for food_info_row in food_info
+        ]
+
     raise ModelNotFoundException('Food', 'name', name)
 
 
@@ -101,12 +159,13 @@ def get_by_id(conn: Connection, id: UUID) -> Food:
     """ Get the food item by id and returns The food object"""
 
     if food_info := conn.execute(food.select().where(food.c.id == id)).fetchone():
+        Food(**{**food_info._asdict(), 'prepared_time': get_time_until_prepared(conn, id=food_info.id)})
         return Food(**food_info._asdict())
     raise ModelNotFoundException('Food', 'id', id)
 
 
-def persist(conn: Connection, name: str, size: str, type: str, price: str, calories: str, time_to_be_prepared: str,
-            contents: list[str], category: str) -> Food:
+def persist(conn: Connection, name: str, size: str, type: str, price: str, calories: str, prepared_time: datetime,
+            content: list[UUID], category: str) -> Food:
     """ Persist a food item in the database. Returns: The persisted Food object """
 
     return Food(**(conn.execute(insert(food).values(
@@ -115,13 +174,13 @@ def persist(conn: Connection, name: str, size: str, type: str, price: str, calor
         type=type,
         category=category,
         price=price,
-        contents=contents,
-        time_to_be_prepared=time_to_be_prepared,
+        content=array(content),
+        prepared_time=prepared_time,
         calories=calories
     ).on_conflict_do_update(
-        constraint='food_number_key',
+        constraint='name_created_at_key',
         set_={
-            'contents': contents,
+            'content': array(content),
             'updated_at': datetime.now()}
     ).returning(food)).fetchone()))
 

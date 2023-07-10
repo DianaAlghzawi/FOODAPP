@@ -14,12 +14,19 @@ from typing import Optional
 @dataclass
 class Content:
     id: UUID
-    food_id: Optional[UUID]
     name: str
     calories: int
     count: int
     created_at: datetime
     updated_at: datetime
+
+    def __init__(self, id, name, calories, count, created_at, updated_at):
+        self.id = id
+        self.name = name
+        self.calories = calories
+        self.count = count
+        self.created_at = created_at
+        self.updated_at = updated_at
 
 
 def add_sort_order_filter(query: Select, filter: UnaryExpression) -> Select:
@@ -53,10 +60,10 @@ def get_by_name_or_raise(conn: Connection, name: str):
     raise ModelNotFoundException('Contents', 'name', name)
 
 
-def new(conn: Connection, name: str, count: int, calories: int, food_id: Optional[UUID] = None) -> Content:
+def new(conn: Connection, name: str, count: int, calories: int) -> Content:
     """ Insert a new content item into the database and return the inserted content. """
 
-    return Content(**(conn.execute(insert(contents).values(name=name, count=count, calories=calories, food_id=food_id)
+    return Content(**(conn.execute(insert(contents).values(name=name, count=count, calories=calories)
                                    .returning(contents)).fetchone())._asdict())
 
 
@@ -71,8 +78,7 @@ def persist(conn: Connection, content: Content) -> Content:
     return Content(**(conn.execute(insert(contents)
                                    .values(name=content.name,
                                            calories=content.calories,
-                                           count=content.count,
-                                           food_id=content.food_id).on_conflict_do_update(
+                                           count=content.count).on_conflict_do_update(
         constraint='name_key',
         set_={'count': content.count,
               'updated_at': datetime.now()}).returning(contents)).fetchone())._asdict())
