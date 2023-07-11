@@ -18,7 +18,7 @@ contents_router = APIRouter(
 
 
 @contents_router.get('')
-async def get(calories_order: Optional[SortOrderEnum] = None, name: Optional[str] = None) -> JSONResponse:
+async def get(name: Optional[str] = None, calories_order: Optional[SortOrderEnum] = None) -> JSONResponse:
     query = select(contents_schema)
 
     if calories_order:
@@ -27,7 +27,7 @@ async def get(calories_order: Optional[SortOrderEnum] = None, name: Optional[str
 
     with engine.connect() as conn:
         if name:
-            return JSONResponse(content=jsonable_encoder(contents.get_by_name_or_raise(conn, name)), status_code=status.HTTP_200_OK)
+            return JSONResponse(content=jsonable_encoder(contents.get_or_raise_by_name(conn, name)), status_code=status.HTTP_200_OK)
 
         return JSONResponse(content=jsonable_encoder(contents.apply_sort_order_filter(conn, query)), status_code=status.HTTP_200_OK)
 

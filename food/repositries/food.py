@@ -5,7 +5,6 @@ from sqlalchemy.engine import Connection
 from food.infra.db.schema import food, contents
 from food.exception import ModelNotFoundException
 from sqlalchemy.dialects.postgresql import insert, array
-# from food.repositries.contents import get_by_name as get_by_content_name
 from sqlalchemy import select, func, String
 from sqlalchemy.sql.expression import UnaryExpression
 from sqlalchemy.sql.selectable import Select
@@ -57,17 +56,19 @@ LARGE_SIZE = 3
 
 
 def add_sort_order_filter(query: Select, filter: UnaryExpression) -> Select:
-    """ Add a sort order filter for unary expresission to order the food in ascending or descinding order base on the calories, price. """
+    """ Add a sort order filter for unary expresission to order the food in ascending or descinding order base on the price. """
     return query.order_by(filter)
 
 
 def add_sort_order_filter_by_calories(filter: UnaryExpression) -> Select:
+    """ Add a sort order filter for unary expresission to order the food in ascending or descinding order base on the calories. """
     return select([food, contents]).select_from(food.join(contents, any_(food.c.content) == contents.c.id)).order_by(filter)
 
 
-def get_combined_response(conn: Connection, query: Select):
-    food_dict = {}
+def get_combined_response(conn: Connection, query: Select) -> List[CombinedResponses]:
+    """ Apply the sort order filter and return a list of the ordered food with it's contents base on the calories. """
 
+    food_dict = {}
     for row in conn.execute(query).fetchall():
         food_data = Food(
             id=row.id,
@@ -82,12 +83,13 @@ def get_combined_response(conn: Connection, query: Select):
             created_at=row.created_at,
             updated_at=row.updated_at
         )
-        content = Content(id=row.id_1,
-                          name=row.name_1,
-                          calories=row.calories,
-                          count=row.count,
-                          created_at=row.created_at_1,
-                          updated_at=row.updated_at_1)
+        content = Content(
+            id=row.id_1,
+            name=row.name_1,
+            calories=row.calories,
+            count=row.count,
+            created_at=row.created_at_1,
+            updated_at=row.updated_at_1)
 
         food_dict.setdefault(food_data.id, {"food": food_data, "contents": []})["contents"].append(content)
 
@@ -95,12 +97,12 @@ def get_combined_response(conn: Connection, query: Select):
 
 
 def apply_sort_order_filter(conn: Connection, query: Select) -> List[Food]:
-    """ Apply the sort order filter and return a list of the ordered food base on the calories, price. """
+    """ Apply the sort order filter and return a list of the ordered food base on the price. """
     return [Food(**food_info._asdict()) for food_info in conn.execute(query).fetchall()]
 
 
-def convert_contents_string_list_to_uuid_list(conn: Connection, food_contents: list[str]) -> List[UUID]:
-    """ Convert contents list string to list of uuid """
+def convert_contents_string_list_to_uuid_list(conn: Connection, food_contents: List[str]) -> List[UUID]:
+    """ Convert contents from list of string to list of uuid """
     if missing_contents := set(food_contents) - set(conn.execute(select(contents.c.name).where(contents.c.name.in_(food_contents))).scalars()):
         raise ModelNotFoundException('Food', 'contents', missing_contents)
 
@@ -118,8 +120,8 @@ def calculate_calories(conn: Connection, food_contents_ids: list[UUID], size: st
         return calories
 
 
-def new(conn: Connection, calories: int, category: str, name: str, size: str, type: str, price: float, content: list[UUID],
-        prepared_time: datetime) -> Food:
+def new(conn: Connection, calories: int, category: str, name: str, size: str, type: str, price: float,
+        content: List[UUID], prepared_time: datetime) -> Food:
     """ Insert a new food item into the database and return the inserted food object. """
 
     return Food(**(conn.execute(insert(food).values(
@@ -165,7 +167,7 @@ def get_by_id(conn: Connection, id: UUID) -> Food:
 
 
 def persist(conn: Connection, name: str, size: str, type: str, price: str, calories: str, prepared_time: datetime,
-            content: list[UUID], category: str) -> Food:
+            content: List[UUID], category: str) -> Food:
     """ Persist a food item in the database. Returns: The persisted Food object """
 
     return Food(**(conn.execute(insert(food).values(

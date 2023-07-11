@@ -52,9 +52,8 @@ def get_by_name(conn: Connection, name: str) -> Optional[Content | None]:
         return Content(**content._asdict())
 
 
-def get_by_name_or_raise(conn: Connection, name: str):
+def get_or_raise_by_name(conn: Connection, name: str) -> Content:
     """ Get the content item by name, Returns The content and raise if the name not found. """
-
     if content := get_by_name(conn, name):
         return content
     raise ModelNotFoundException('Contents', 'name', name)
@@ -62,7 +61,6 @@ def get_by_name_or_raise(conn: Connection, name: str):
 
 def new(conn: Connection, name: str, count: int, calories: int) -> Content:
     """ Insert a new content item into the database and return the inserted content. """
-
     return Content(**(conn.execute(insert(contents).values(name=name, count=count, calories=calories)
                                    .returning(contents)).fetchone())._asdict())
 

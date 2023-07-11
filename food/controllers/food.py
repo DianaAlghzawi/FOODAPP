@@ -37,11 +37,10 @@ async def get(name: Optional[str] = None, calories: Optional[SortOrderEnum] = No
 
     with engine.connect() as conn:
         if name:
-            food_info = food.get_by_name(conn, name)
-            return JSONResponse(content=jsonable_encoder(food_info), status_code=status.HTTP_200_OK)
+            return JSONResponse(content=jsonable_encoder(food.get_by_name(conn, name)), status_code=status.HTTP_200_OK)
 
         if calories:
-            return food.get_combined_response(conn, query)
+            return JSONResponse(content=jsonable_encoder(food.get_combined_response(conn, query)), status_code=status.HTTP_200_OK)
         return JSONResponse(content=jsonable_encoder(food.apply_sort_order_filter(conn, query)), status_code=status.HTTP_200_OK)
 
 
@@ -61,11 +60,10 @@ async def update(id: UUID, patch_meal: PatchFood) -> JSONResponse:
         food_info = food.get_by_id(conn, id)
         food_info.content = patch_meal.contents if patch_meal.contents else food_info.content
         food_info.content = food.convert_contents_string_list_to_uuid_list(conn, patch_meal.contents)
-        print(food_info.name)
-        print(food_info.created_at)
+
         return JSONResponse(content=jsonable_encoder(food.persist(conn, food_info.name, food_info.size, food_info.type, food_info.price,
                                                                   food_info.calories, food_info.prepared_time, food_info.content,
-                                                                  food_info.category)))
+                                                                  food_info.category)), status_code=status.HTTP_200_OK)
 
 
 @food_router.delete('/{id}')
