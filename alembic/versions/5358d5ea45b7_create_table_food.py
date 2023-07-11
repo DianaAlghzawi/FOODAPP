@@ -1,8 +1,8 @@
 """create table food
 
-Revision ID: c596db3546b7
+Revision ID: 5358d5ea45b7
 Revises: 36cdfcd15269
-Create Date: 2023-07-10 23:31:10.643566
+Create Date: 2023-07-11 16:50:30.712075
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = 'c596db3546b7'
+revision = '5358d5ea45b7'
 down_revision = '36cdfcd15269'
 branch_labels = None
 depends_on = None
@@ -40,8 +40,7 @@ def upgrade() -> None:
     sa.Column('calories', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
-    sa.PrimaryKeyConstraint('id', name='food_pk'),
-    sa.UniqueConstraint('name', 'created_at', name='name_created_at_key')
+    sa.PrimaryKeyConstraint('id', name='food_pk')
     )
     # ### end Alembic commands ###
 

@@ -7,8 +7,7 @@ from food.repositries import contents
 from uuid import UUID
 from food.infra.db.enumerations import SortOrderEnum
 from typing import Optional
-from sqlalchemy import select, desc
-from food.infra.db.schema import contents as contents_schema
+from food.exception import ModelNotFoundException
 
 
 contents_router = APIRouter(
@@ -19,20 +18,14 @@ contents_router = APIRouter(
 
 @contents_router.get('')
 async def get(name: Optional[str] = None, calories_order: Optional[SortOrderEnum] = None) -> JSONResponse:
-    query = select(contents_schema)
-
-    if calories_order:
-        query = contents.add_sort_order_filter(query, desc(contents_schema.c.calories))\
-            if calories_order == 'DESCINDING' else contents.add_sort_order_filter(query, contents_schema.c.calories)
-
     with engine.connect() as conn:
         if name:
-            return JSONResponse(content=jsonable_encoder(contents.get_or_raise_by_name(conn, name)), status_code=status.HTTP_200_OK)
+            return JSONResponse(content=jsonable_encoder(contents.get_by_name(conn, name)), status_code=status.HTTP_200_OK)
+        if calories_order:
+            return JSONResponse(content=jsonable_encoder(contents.filter_by_calories(conn, calories_order)), status_code=status.HTTP_200_OK)
 
-        return JSONResponse(content=jsonable_encoder(contents.apply_sort_order_filter(conn, query)), status_code=status.HTTP_200_OK)
 
-
-@contents_router.get('/{id}/')
+@contents_router.get('/{id}')
 async def get_by_id(id: UUID) -> JSONResponse:
     with engine.connect() as conn:
         return JSONResponse(content=jsonable_encoder(contents.get_by_id(conn, id)), status_code=status.HTTP_200_OK)
@@ -41,10 +34,11 @@ async def get_by_id(id: UUID) -> JSONResponse:
 @contents_router.post('')
 def insert(content: Content) -> JSONResponse:
     with engine.begin() as conn:
-        if content_info := contents.get_by_name(conn, content.name):
-            return JSONResponse(content=jsonable_encoder(content_info), status_code=status.HTTP_200_OK)
-        return JSONResponse(content=jsonable_encoder(contents.new(conn, content.name, content.count, content.calories)),
-                            status_code=status.HTTP_201_CREATED)
+        try:
+            return JSONResponse(content=jsonable_encoder(contents.get_by_name(conn, content.name)), status_code=status.HTTP_200_OK)
+        except ModelNotFoundException:
+            return JSONResponse(content=jsonable_encoder(contents.new(conn, content.name, content.count, content.calories)),
+                                status_code=status.HTTP_201_CREATED)
 
 
 @contents_router.delete('')

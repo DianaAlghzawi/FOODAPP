@@ -25,9 +25,7 @@ food = Table(
     Column('calories', Integer, nullable=False),
     Column('created_at', DateTime, nullable=False, default=now, server_default=sa.func.now()),
     Column('updated_at', DateTime, nullable=True, onupdate=now, default=now, server_default=sa.func.now()),
-    PrimaryKeyConstraint('id', name='food_pk'),
-    UniqueConstraint('name', 'created_at', name='name_created_at_key')
-)
+    PrimaryKeyConstraint('id', name='food_pk'))
 
 contents = Table(
     'contents',

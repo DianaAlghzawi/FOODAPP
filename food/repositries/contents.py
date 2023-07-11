@@ -5,10 +5,7 @@ from sqlalchemy.engine import Connection
 from food.infra.db.schema import contents
 from sqlalchemy.dialects.postgresql import insert
 from food.exception import ModelNotFoundException
-from typing import List
-from sqlalchemy.sql.expression import UnaryExpression
-from sqlalchemy.sql.selectable import Select
-from typing import Optional
+from food.infra.db.enumerations import SortOrderEnum
 
 
 @dataclass
@@ -20,23 +17,15 @@ class Content:
     created_at: datetime
     updated_at: datetime
 
-    def __init__(self, id, name, calories, count, created_at, updated_at):
-        self.id = id
-        self.name = name
-        self.calories = calories
-        self.count = count
-        self.created_at = created_at
-        self.updated_at = updated_at
 
-
-def add_sort_order_filter(query: Select, filter: UnaryExpression) -> Select:
-    """ Add a sort order filter for unary expresission to order the conetnts in ascending or descinding order base on the calories. """
-    return query.order_by(filter)
-
-
-def apply_sort_order_filter(conn: Connection, query: Select) -> List[Content]:
-    """ Apply the sort order filter and return a list of the ordered contents base on the calories. """
-    return [Content(**content._asdict()) for content in conn.execute(query).fetchall()]
+def filter_by_calories(conn: Connection, order_type: SortOrderEnum) -> list[Content]:
+    """ Filter and return a list of the ordered contents base on the calories. """
+    match order_type:
+        case order_type.ASCENDING:
+            sel = contents.select().order_by(contents.c.calories.asc())
+        case order_type.DESCINDING:
+            sel = contents.select().order_by(contents.c.calories.desc())
+    return [Content(**content._asdict()) for content in conn.execute(sel).fetchall()]
 
 
 def get_by_id(conn: Connection, id: UUID) -> Content:
@@ -46,16 +35,10 @@ def get_by_id(conn: Connection, id: UUID) -> Content:
     raise ModelNotFoundException('Contents', 'id', id)
 
 
-def get_by_name(conn: Connection, name: str) -> Optional[Content | None]:
+def get_by_name(conn: Connection, name: str) -> Content:
     """ Get the content item by name, Returns The content or none if the content name not exist. """
     if content := conn.execute(contents.select().where(contents.c.name == name)).fetchone():
         return Content(**content._asdict())
-
-
-def get_or_raise_by_name(conn: Connection, name: str) -> Content:
-    """ Get the content item by name, Returns The content and raise if the name not found. """
-    if content := get_by_name(conn, name):
-        return content
     raise ModelNotFoundException('Contents', 'name', name)
 
 

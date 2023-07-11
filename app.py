@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
+
 from food.controllers.contents import contents_router
 from food.controllers.food import food_router
 from food.exception import ModelNotFoundException
-from fastapi.responses import JSONResponse
 
 app = FastAPI()
 app.include_router(contents_router)
