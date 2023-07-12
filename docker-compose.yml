@@ -1,0 +1,39 @@
+---
+services:
+  food-api-base:
+    image: food-api-image
+    build:
+      context: .
+    container_name: food-api-base
+    environment:
+      - VIRTUAL_HOST=food-api-app.docker
+      - POSTGRES_HOST=food-postgres
+      - POSTGRES_DB=food
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_PORT=5432
+    volumes:
+      - ${PWD}:/app
+    command: ["echo", "I only exist to be extended so I'll just exit, thanks"]
+
+  food-api:
+    extends: food-api-base
+    container_name: food-api-app
+    depends_on:
+     - food-postgres
+    ports:
+      - "5000:8000"
+    command: ["uvicorn", "--reload", "--workers", "1", "--host", "0.0.0.0", "--port", "8000", "app:app"]
+
+  food-postgres:
+    container_name: food-postgres
+    image: postgres:14.2
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      VIRTUAL_HOST: food-postgres.docker
+      POSTGRES_DB: food
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_PORT: '5432'
+    ports:
+      - "5791:5432"
