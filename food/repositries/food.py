@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -14,7 +13,7 @@ from food.infra.db.schema import contents, food
 from food.repositries.contents import Content
 
 
-@dataclass
+@dataclass(frozen=True)
 class Food:
     id: UUID
     name: str
@@ -49,7 +48,7 @@ def apply_filter(conn: Connection, query: Select) -> list[food]:
     return food_result
 
 
-def filter(conn: Connection, calories_order_type: SortOrderEnum, price_order_type: SortOrderEnum) -> Select:
+def filter(calories_order_type: SortOrderEnum, price_order_type: SortOrderEnum) -> Select:
     """ Add the sort order filter and return a select query """
     query = food.select()
 
@@ -73,25 +72,38 @@ def add_filter(order_type: SortOrderEnum, select_query: Select, filter: Select) 
 
 def convert_contents_string_to_uuid(conn: Connection, food_contents: list[str]) -> list[UUID]:
     """ Convert contents from list of string to list of uuid """
-    if missing_contents := set(food_contents) - set(conn.execute(select(contents.c.name).where(contents.c.name.in_(food_contents))).scalars()):
-        raise ModelNotFoundException('Food', 'contents', missing_contents)
+    uuids_list = []
+    contents_list = []
 
-    return conn.execute(select(contents.c.id).where(contents.c.name.in_(food_contents))).scalars().fetchall()
+    for c in conn.execute(select([contents.c.name, contents.c.id]).where(contents.c.name.in_(food_contents))).fetchall():
+        contents_list.append(c.name)
+        uuids_list.append(c.id)
+
+    if missing_contents := set(food_contents) - set(contents_list):
+        raise ModelNotFoundException('Food', 'contents', missing_contents)
+    return uuids_list
 
 
 def get_time_to_prepare(prepared_time: datetime) -> str:
-    return str(max(math.ceil(((prepared_time.astimezone() - datetime.now().astimezone()).total_seconds() / 60)), 0)) + ' Minutes'
+    time_difference = (prepared_time.replace(tzinfo=None) - datetime.now()).total_seconds() / 60
+    return f'{time_difference if time_difference > 0 else 0} Minutes'
 
 
 def new(conn: Connection, category: str, name: str, size: str, type: str, price: float,
         content_ids: list[UUID], prepared_time: datetime) -> Food:
     """ Insert a new food item into the database and return the inserted food object. """
     if contents_calories_summation := conn.execute(select(func.sum(contents.c.calories)).where(contents.c.id.in_(content_ids))).scalar():
-        calories = contents_calories_summation * MEDUIM_SIZE if size == 'MEDUIM' else contents_calories_summation * \
-            LARGE_SIZE if size == 'LARGE' else contents_calories_summation
+        match size:
+            case 'MEDUIM':
+                calories = contents_calories_summation * MEDUIM_SIZE
+            case 'LARGE':
+                calories = contents_calories_summation * LARGE_SIZE
+            case 'SMALL':
+                calories = contents_calories_summation
+
         calories = calories + MEAL_ADDIONAL_CALORIES if category == 'MEAL' else calories
 
-    food_info = Food(time_to_prepare=get_time_to_prepare(prepared_time), **(conn.execute(insert(food).values(
+    food_info = conn.execute(insert(food).values(
         name=name,
         size=size,
         type=type,
@@ -100,9 +112,10 @@ def new(conn: Connection, category: str, name: str, size: str, type: str, price:
         prepared_time=prepared_time,
         calories=calories,
         category=category
-    ).returning(food)).fetchone()._asdict()))
-    food_info.content = get_contents_by_id(conn, food_info.content)
-    return food_info
+    ).returning(food)).fetchone()
+
+    return {**food_info._asdict(), 'content': get_contents_by_id(conn, content_ids),
+            'time_to_prepare': get_time_to_prepare(food_info.prepared_time)}
 
 
 def get_by_name(conn: Connection, name: str) -> list[Food]:
@@ -110,7 +123,6 @@ def get_by_name(conn: Connection, name: str) -> list[Food]:
     if food_info := conn.execute(food.select().where(food.c.name == name)).fetchall():
         return [Food(**{**food_info_row._asdict(), 'time_to_prepare': get_time_to_prepare(food_info_row.prepared_time),
                 'content': get_contents_by_id(conn, food_info_row.content)}) for food_info_row in food_info]
-    raise ModelNotFoundException('Food', 'name', name)
 
 
 def get_by_id(conn: Connection, id: UUID) -> Food:
@@ -121,27 +133,26 @@ def get_by_id(conn: Connection, id: UUID) -> Food:
     raise ModelNotFoundException('Food', 'id', id)
 
 
-def persist(conn: Connection, id: UUID, name: str, size: str, type: str, price: str, calories: str, prepared_time: datetime,
-            content: list[UUID], category: str) -> Food:
+def persist(conn: Connection, food_info: Food, content_ids: list[UUID]) -> Food:
     """ Persist a food item in the database. Returns: The persisted Food object """
-    food_info = Food(time_to_prepare=get_time_to_prepare(prepared_time), **(conn.execute(insert(food).values(
-        id=id,
-        name=name,
-        size=size,
-        type=type,
-        category=category,
-        price=price,
-        content=array(content),
-        prepared_time=prepared_time,
-        calories=calories
+    food_info = conn.execute(insert(food).values(
+        id=food_info.id,
+        name=food_info.name,
+        size=food_info.size,
+        type=food_info.type,
+        category=food_info.category,
+        price=food_info.price,
+        content=array(content_ids),
+        prepared_time=food_info.prepared_time,
+        calories=food_info.calories
     ).on_conflict_do_update(
         index_elements=['id'],
         set_={
-            'content': array(content),
+            'content': array(content_ids),
             'updated_at': datetime.now()}
-    ).returning(food)).fetchone()))
-    food_info.content = get_contents_by_id(conn, food_info.content)
-    return food_info
+    ).returning(food)).fetchone()
+    return {**food_info._asdict(), 'content': get_contents_by_id(conn, content_ids),
+            'time_to_prepare': get_time_to_prepare(food_info.prepared_time)}
 
 
 def delete(conn: Connection, id: UUID) -> None:

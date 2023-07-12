@@ -53,5 +53,5 @@ def delete(id: UUID) -> Response:
 def update(id: UUID, content_patch: ContentPatch) -> JSONResponse:
     with engine.begin() as conn:
         content = contents.get_by_id(conn, id)
-        content.count = content_patch.count if content_patch.count else content.count
+        content = content.block_count(content_patch.count) if content_patch.count else content
         return JSONResponse(content=jsonable_encoder(contents.persist(conn, content)), status_code=status.HTTP_200_OK)

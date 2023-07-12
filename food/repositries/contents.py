@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
 
@@ -10,7 +10,7 @@ from food.infra.db.enumerations import SortOrderEnum
 from food.infra.db.schema import contents
 
 
-@dataclass
+@dataclass(frozen=True)
 class Content:
     id: UUID
     name: str
@@ -18,6 +18,9 @@ class Content:
     count: int
     created_at: datetime
     updated_at: datetime
+
+    def block_count(self, count: int) -> "Content":
+        return replace(self, count=count)
 
 
 def filter_by_calories(conn: Connection, order_type: SortOrderEnum) -> list[Content]:
