@@ -27,17 +27,17 @@ async def get(name: Optional[str] = None, calories: Optional[SortOrderEnum] = No
     with engine.connect() as conn:
         if name:
             return JSONResponse(content=jsonable_encoder(food.get_by_name(conn, name)), status_code=status.HTTP_200_OK)
-        return JSONResponse(content=jsonable_encoder(food.apply_filter(conn, food.filter(conn, calories, price))),
+        return JSONResponse(content=jsonable_encoder(food.apply_filter(conn, food.filter(calories, price))),
                             status_code=status.HTTP_200_OK)
 
 
 @food_router.post('')
 async def insert(food_data: Food) -> JSONResponse:
     with engine.begin() as conn:
-        food_data.content = food.convert_contents_string_to_uuid(conn, food_data.content)
+        contents_uuid = food.convert_contents_string_to_uuid(conn, food_data.content)
         return JSONResponse(content=jsonable_encoder(food.new(conn, food_data.category, food_data.name,
                                                               food_data.size, food_data.type,
-                                                              food_data.price, food_data.content,
+                                                              food_data.price, contents_uuid,
                                                               food_data.prepared_time)), status_code=status.HTTP_201_CREATED)
 
 
@@ -45,11 +45,8 @@ async def insert(food_data: Food) -> JSONResponse:
 async def update(id: UUID, patch_meal: PatchFood) -> JSONResponse:
     with engine.begin() as conn:
         food_info = food.get_by_id(conn, id)
-        food_info.content = food.convert_contents_string_to_uuid(conn, patch_meal.contents)
-        return JSONResponse(content=jsonable_encoder(food.persist(conn, food_info.id, food_info.name, food_info.size, food_info.type,
-                                                                  food_info.price, food_info.calories,
-                                                                  food_info.prepared_time, food_info.content,
-                                                                  food_info.category)), status_code=status.HTTP_200_OK)
+        contents_ids = food.convert_contents_string_to_uuid(conn, patch_meal.contents)
+        return JSONResponse(content=jsonable_encoder(food.persist(conn, food_info, contents_ids)), status_code=status.HTTP_200_OK)
 
 
 @food_router.delete('/{id}')
