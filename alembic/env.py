@@ -1,8 +1,10 @@
 from logging.config import fileConfig
+
 # from os import getenv
 # from sqlalchemy import engine_from_config
 # from sqlalchemy import pool
 from sqlalchemy import create_engine
+
 from alembic import context
 from food.infra.db import schema
 from food.infra.db.engine import get_db_url

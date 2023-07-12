@@ -1,10 +1,11 @@
-from sqlalchemy import Table, ARRAY, String, DateTime, Column, text, Integer
-from sqlalchemy.dialects.postgresql import UUID
-import sqlalchemy as sa
 from datetime import datetime
-from food.infra.db.engine import metadata
-from sqlalchemy import PrimaryKeyConstraint, UniqueConstraint
 
+import sqlalchemy as sa
+from sqlalchemy import (ARRAY, Column, DateTime, Integer, PrimaryKeyConstraint,
+                        String, Table, UniqueConstraint, text)
+from sqlalchemy.dialects.postgresql import UUID
+
+from food.infra.db.engine import metadata
 
 new_uuid = text('uuid_generate_v4()')
 now = datetime.utcnow()

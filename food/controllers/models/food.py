@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
-from food.infra.db.enumerations import FoodsTypeEnum, SizeEnum, ContentsMealType
 from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from food.infra.db.enumerations import (ContentsMealType, FoodsTypeEnum,
+                                        SizeEnum)
 
 
 class Food(BaseModel):

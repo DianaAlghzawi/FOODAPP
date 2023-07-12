@@ -1,5 +1,6 @@
 from os import getenv
-from sqlalchemy import create_engine, MetaData
+
+from sqlalchemy import MetaData, create_engine
 
 
 def get_db_url() -> str:

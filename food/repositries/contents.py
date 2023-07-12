@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from uuid import UUID
 from datetime import datetime
-from sqlalchemy.engine import Connection
-from food.infra.db.schema import contents
+from uuid import UUID
+
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.engine import Connection
+
 from food.exception import ModelNotFoundException
 from food.infra.db.enumerations import SortOrderEnum
+from food.infra.db.schema import contents
 
 
 @dataclass

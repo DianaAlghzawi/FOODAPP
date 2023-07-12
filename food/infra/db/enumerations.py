@@ -1,7 +1,8 @@
-from typing import Dict, Tuple, Any, Type, Optional, List
-from sqlalchemy.engine import Dialect
-import sqlalchemy as sa
 from enum import Enum, auto
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+import sqlalchemy as sa
+from sqlalchemy.engine import Dialect
 
 
 class EnumNameValues(Enum):
